@@ -4,7 +4,7 @@ Overview
 
 LAN-Orchestra is a lightweight deployment automation tool for Windows endpoints that orchestrates application installations remotely via PSAppDeployToolkit (PSADT).
 The PSADT package itself is not inlcuded here, see PSADT's main site for additional documentation and binaries https://psappdeploytoolkit.com/
-This tool is not affilated with PSADT or their team in any way, nor does it technical require it if you wish to customize this script to use invoke command directly.
+This tool is not affilated with PSADT or their team in any way, nor does it technically require it if you wish to customize this script to use invoke command directly.
 
 Designed to:
     Operate within a local network (LAN).
@@ -112,4 +112,5 @@ Requirements
 Dependency	Version / Notes
 PowerShell	v5.1+ (Windows PowerShell, not PSCore)
 OS Support	Target Windows client with PowerShell remoting enabled
+
 Permissions	Admin-level access to targets and UNC shares

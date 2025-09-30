@@ -28,7 +28,7 @@
 param (
 	[string]$UNCAppDir = "\\Example.Domain\ExampleShare\TestDummyAppUNC",
 	[ValidateSet("Install","Uninstall")]
-	[string]$Action = "Uninstall",
+	[string]$Action = "Install",
 	[int]$MaxConcurrentJobs = 10,
 	[int]$MaxRetries = 3,
 	[int]$JobPollSeconds = 2
@@ -181,4 +181,5 @@ do {
 } while ($ActiveJobs.Count -gt 0)
 
 Write-Log "All $Action operations completed"
+
 #endregion

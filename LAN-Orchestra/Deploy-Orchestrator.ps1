@@ -146,6 +146,19 @@ foreach ($Hostname in $Targets) {
 		Write-Log "$Hostname exceeded max retries, skipping" -Level WARN
 		continue
 	}
+	
+	# Network Speed Check by attempting 200 file copies with a total size of 20MB, normal tests should be near instant.
+	$networkTest = Invoke-RemoteNetworkTest -UNCSource $UNCAppDir -Hostname $Hostname
+	if (-not $networkTest) {
+		Write-Log "Network speed test failed for $Hostname. Skipping deployment." -Level WARN
+		$HostResults = Update-HostResults -CurrentState $HostResults -Hostname $Hostname -UpdateData @{
+			PreDeployDetect   = "Fail Slow Network"
+			JobStatus         = "Failed"
+			LastErrorDetail   = "Slow network or network test source folder missing"
+		}
+		continue
+	}
+	
 
 	$job = Start-DeploymentJob -Hostname $Hostname `
 							   -UNCSource $UNCAppDir `
@@ -181,5 +194,4 @@ do {
 } while ($ActiveJobs.Count -gt 0)
 
 Write-Log "All $Action operations completed"
-
 #endregion

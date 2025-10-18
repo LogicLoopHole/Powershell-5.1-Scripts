@@ -21,7 +21,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-
 # Deploy-Orchestrator-Helpers.ps1
 # Utility functions used by Deploy-Orchestrator.ps1
 
@@ -170,16 +169,28 @@ function Update-HostResults {
 function Get-TargetStatus {
 	param ([string]$Hostname)
 
-	if (-not (Test-Connection -ComputerName $Hostname -Count 1 -Quiet -ErrorAction SilentlyContinue)) {
-		return "Offline"
-	}
+	if (-not (Test-Connection -ComputerName $Hostname -Count 1 -Quiet -ErrorAction SilentlyContinue))
+		{
+			return "Offline"
+		}
 
-	try {
-		Test-WSMan -ComputerName $Hostname -ErrorAction Stop | Out-Null
-		return "Online"
-	} catch {
-		return "WinRM Issue"
-	}
+	try
+		{
+			Test-WSMan -ComputerName $Hostname -ErrorAction Stop | Out-Null
+			#safe guard check if target is a server
+			$osInfo = Get-CimInstance -ClassName Win32_OperatingSystem
+			if ($osInfo.ProductType -eq 3)
+				{
+					Write-Warning "Target device has server OS detected, STOPPING script as safe guard."
+					Pause
+					exit
+				}
+			return "Online"
+		}	
+	catch
+		{
+			return "WinRM Issue"
+		}
 }
 
 function Load-DetectionCode {
@@ -196,11 +207,13 @@ function Load-DetectionCode {
 			return $code
 		} else {
 			Write-Log "Detection script not found at: $path" -Level WARN
-			return ""
+			Pause
+			exit
 		}
 	} catch {
 		Write-Log "Failed to load detection script from $path : $($_.Exception.Message)" -Level WARN
-		return ""
+		Pause
+		exit
 	}
 }
 
@@ -249,6 +262,47 @@ function Invoke-RemoteDetection {
 #endregion
 
 #region [DEPLOYMENT]
+function Invoke-RemoteNetworkTest {
+    param(
+        [string]$UNCSource,
+        [string]$Hostname
+    )
+
+    $sourceFolder = Join-Path -Path $UNCAppDir -ChildPath "PSAppDeployToolkit"
+    $destBase = "C:\Windows\Temp"
+    $destFolder = Join-Path -Path $destBase -ChildPath "PSAppDeployToolkit"
+    if (Test-Path -Path $destFolder) {
+        Remove-Item -Path $destFolder -Recurse -Force
+    }
+
+    # Robocopy command to copy from UNC to local temp dir
+    $robocopyCommand = "robocopy '$sourceFolder' '$destFolder' /E /Z /MT:8 /R:3 /W:5 /NP /TEE"
+    $netTestJob = Start-Job -ScriptBlock {
+        param($cmd)
+        Invoke-Expression $cmd
+    } -ArgumentList $robocopyCommand
+
+    # Wait for completion (timeout 6 seconds) or stop if too slow to avoid wasting bandwidth
+    try {
+        if (Wait-Job -Job $netTestJob -Timeout 6) {
+            Receive-Job -Job $netTestJob | Out-Null
+            Write-Host "Network speed test successfully completed"
+            return $true
+        } else {
+            Stop-Job -Job $netTestJob
+            Write-Warning "Slow Network Detected, PreDeployDetect is FailSlowNetwork"
+            return $false
+        }
+    } catch {
+        # If Wait-Job throws an error due to null job or other reasons
+        Write-Warning "An unexpected error occurred: $_"
+        return $false
+    }
+
+    # Cleanup temp folder after test (even if job failed)
+    Remove-Item -Path $destFolder -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function Start-DeploymentJob {
 	param (
 		[string]$Hostname,

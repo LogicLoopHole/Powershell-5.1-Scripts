@@ -3,8 +3,8 @@ LAN-Orchestra | ReadMe / Documentation
 Overview
 
 LAN-Orchestra is a lightweight deployment automation tool for Windows endpoints that orchestrates application installations remotely via PSAppDeployToolkit (PSADT).
-The PSADT package itself is not inlcuded here, see PSADT's main site for additional documentation and binaries https://psappdeploytoolkit.com/
-This tool is not affilated with PSADT or their team in any way, nor does it technically require it if you wish to customize this script to use invoke command directly.
+The PSADT v4 package itself is not inlcuded here, see PSADT's main site for additional documentation and binaries https://psappdeploytoolkit.com/
+This tool is not affilated with PSADT or their team in any way, nor may it even technically require it if you wish to customize this script to use invoke command directly.
 
 Designed to:
     Operate within a local network (LAN).
@@ -31,8 +31,8 @@ C:\Temp\LAN-Orchestra\
 ├── Data\
 │   └── Console-Output.log            ← Single rotating activity log
 │   └── Tracking-DB.json              ← Per-device deployment state log
-├── Deploy-Orchestrator.ps1           ← Main control entry script (install/uninstall)
-├── Status-Update.ps1                 ← Read-only viewer using GridView
+├── Deploy-Orchestrator.ps1           ← Main control entry script to install/uninstall (open with PowerShell ISE as administrator for best UX)
+├── Status-Update.ps1                 ← Read-only viewer using GridView (can right-click Run with Powershell without admin even while deploy is running)
 ├── Target-Devices.txt                ← Line-delimited list of device hostnames/IPs
 
 
@@ -46,8 +46,10 @@ Deployment Workflow Overview
         For each target:
             Ping (Test-Connection)
             WinRM connectivity check (Test-WSMan)
+            Verify target is not a server OS
 
     Pre-Installation Detection
+        Remotely evaluates network speed and skips if too slow
         For unknown/failure status hosts only:
             Remotely evaluates SupportFiles\Detection-Method.ps1
             If Pass, skips full installation (presumes manual install)
@@ -112,5 +114,4 @@ Requirements
 Dependency	Version / Notes
 PowerShell	v5.1+ (Windows PowerShell, not PSCore)
 OS Support	Target Windows client with PowerShell remoting enabled
-
 Permissions	Admin-level access to targets and UNC shares

@@ -1,0 +1,1 @@
+Logs and Tracking DB go here and are created in Data folder

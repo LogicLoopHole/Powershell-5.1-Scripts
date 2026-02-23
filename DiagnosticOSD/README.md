@@ -130,12 +130,21 @@ Install-Module -Name OSDCloud -SkipPublisherCheck
 
 ## Quick Start
 
-### 1. Clone the Repo
+### 1. Get the Template
 
-Clone to a location on your build machine. The repo contains both the OSDCloud workspace (`OSD-WS-TST1`) and the custom content staging area (`OSD-NTFS`).
+Clone the repo and use the `DiagnosticOSD` folder as your starting template:
 
 ```powershell
-git clone https://github.com/<your-username>/DiagnosticOSD.git C:\DiagnosticOSD
+git clone https://github.com/LogicLoopHole/Powershell-5.1-Scripts.git
+cd Powershell-5.1-Scripts\DiagnosticOSD
+```
+
+Copy the `DiagnosticOSD` folder to your build machine (e.g., `C:\DiagnosticOSD`). The folder structure is your template:
+
+```
+C:\DiagnosticOSD\
+├── OSD-NTFS\          (USB content — customize scripts, add your drivers + WIM)
+└── OSD-WS-TST1\       (created by OSDCloud workspace commands below)
 ```
 
 ### 2. Add Your Content (Not Included in Repo)

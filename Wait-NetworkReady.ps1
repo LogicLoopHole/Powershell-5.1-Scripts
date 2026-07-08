@@ -42,6 +42,7 @@ for ($i = 1; $i -le $MaxAttempts; $i++)
                 Invoke-CimMethod -ClassName Win32_NetworkAdapterConfiguration -MethodName RenewDHCPLeaseAll   | Out-Null
             }
         Start-Sleep -Seconds 3
+        Clear-DnsClientCache
     }
 Write-Host "No connectivity after $MaxAttempts attempts - failing the task sequence."
 exit 1

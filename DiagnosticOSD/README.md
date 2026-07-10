@@ -49,6 +49,7 @@ Not yet validated in this build: the content-sync share workflow (`10-Sync-Conte
 ## ADK Version
 
 **23H2 ADK (10.1.22631)** is the target for this project.
+ADK 10.1.25398.1 23H2 has also been tested successfully.
 
 The ADK version determines the WinPE version, not the OS version being deployed. A WinPE built from the 23H2 ADK deploys any WIM without issue — ADK version and target OS do not need to match.
 

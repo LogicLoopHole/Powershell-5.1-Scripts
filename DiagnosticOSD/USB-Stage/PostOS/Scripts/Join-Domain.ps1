@@ -23,39 +23,8 @@
 #
 
 # Join-Domain.ps1
-# A desktop icon the engineer runs manually when a pre-join machine is ready to join.
-# NOT auto-triggered - there is no auto-run and no on-logon entry. Retry = double-click again.
-# Lives at C:\Deploy\PostOS\Scripts (staged from the USB by 50-Configure-RunOnce); the
-# "Join Domain.cmd" launcher is a static USB file (PostOS\Desktop\) copied onto the
-# logged-in user's desktop at first logon by a RunOnce.
-#
-# Password model (forced change happens BEFORE this script ever runs):
-#   The deploy unattend's FirstLogonCommands (40-Write-HostnameUnattend.ps1) set
-#   password-expiry + must-change on the built-in Administrator IN the first logon session,
-#   then reboot; boot 2's logon hits the flag and forces Windows' own native change-password
-#   screen. The engineer sets a per-machine password there before reaching a usable desktop.
-#   So by the time this icon is clicked, the local admin password is normally already set by
-#   the engineer - this script does NOT collect or change it. The password is never typed
-#   into this script, its memory, or any file. (The flags do NOT ride in the WIM: the
-#   unattend's own blank-password write at first boot clears a pre-baked must-change bit -
-#   proven on the 7/2/2026 deploy.)
-#
-#   Post-join password handling:
-#     - Reset password-expiry to Never (the MS default state) as the LAST action before the
-#       success reboot, so a domain-joined machine is left in the expected default. Best
-#       effort: a failure to reset is logged, not fatal (LAPS rotates the password anyway).
-#     - Backstop: if the engineer somehow never set a password and blank survived to a
-#       successful join, a random discarded password lands so blank never persists on-domain.
-#
-# Failure model: any join failure leaves the password and the expiry flag exactly as they
-# are, so the machine stays accessible for troubleshooting. A failed join deliberately does
-# NOT reset expiry - if the box is troubleshot long enough for the flag to fire, the engineer
-# (who knows the password) just sets a new one; harmless and self-correcting. Re-run the icon.
-# If the computer account already exists in AD (previous deploy/reimage of this hostname),
-# the script offers to reuse it and rejoins without -OUPath - the object stays in its
-# current OU and keeps group memberships/LAPS state.
-
-#Requires -RunAsAdministrator
+# Staged to C:\Deploy\PostOS\Scripts by 50-Configure-RunOnce; the "Join Domain.cmd" launcher
+# is a static USB file copied to the logged-in user's desktop at first logon by a RunOnce.
 
 Add-Type -AssemblyName System.Windows.Forms
 

@@ -26,8 +26,9 @@
 # Ping targets (IP or hostname). All targets are pinged at the same moment every interval.
 $targets = @("8.8.8.8")			# e.g. @("10.1.1.20", "fileserver01", "8.8.8.8")
 $pingIntervalMs = 1000
-$pingTimeoutMs = 900			# Under the interval: one ping per target every interval, even during outages.
-								# Longer (e.g. 4000, like ping.exe) also works; a failing target just gets pinged less often.
+$pingTimeoutMs = 4000			# Same as ping.exe: lost = no reply within 4 seconds. While a target is down it's re-pinged
+								# about every 5 seconds; LOST is still stamped with when the first unanswered ping was sent.
+								# (900 gives 1-second resolution during outages, but also counts replies slower than 0.9 s as lost.)
 $clientHostname = [System.Net.Dns]::GetHostName()
 $logFilePath = "C:\temp\Net-Uptime-Monitor_$clientHostname.log"
 

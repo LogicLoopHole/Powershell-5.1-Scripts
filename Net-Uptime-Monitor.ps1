@@ -32,13 +32,16 @@ $pingTimeoutMs = 4000			# Same as ping.exe: lost = no reply within 4 seconds. Wh
 $clientHostname = [System.Net.Dns]::GetHostName()
 $logFilePath = "C:\temp\Net-Uptime-Monitor_$clientHostname.log"
 
-# Processes to monitor (Add names here). Every instance is tracked by PID; explorer marks user logon/logoff.
+# Processes to monitor (Add names here). Logged per process + user + session: STARTED when it first runs there,
+# STOPPED when nothing is left running there. sihost runs once per signed-in session, so it marks logon/logoff.
 # Seeing other users' processes needs admin rights, so run as SYSTEM or elevated.
-$processNames = @("explorer", "notepad", "taskmgr", "ShellExperienceHost")
-$logProcessDetails = $true		# Log parent + command line of new instances (command lines can contain secrets)
+$processNames = @("sihost", "notepad", "taskmgr", "ShellExperienceHost")
+$processGraceSec = 2			# Back within this many seconds = a hand-off between instances, not logged as a stop
+$logProcessDetails = $true		# Log parent + command line on STARTED lines (command lines can contain secrets)
 
 # --- Storage for tracking states ---
-$procs = @{}	# PID -> tracked process instance
+$groups = @{}	# "name | User | Session" -> state while that process runs for that user/session
+$procs = @{}	# PID -> each running instance (a handle is held so its exit code stays readable)
 $pingStates = @(foreach ($t in $targets) {
 	[pscustomobject]@{
 		Target = $t; Ping = New-Object System.Net.NetworkInformation.Ping
@@ -108,45 +111,65 @@ function Get-ProcessDetail {
 	return " | Parent: $parentName PID $($me.ParentProcessId) | Cmd: $($me.CommandLine)"
 }
 
+function Format-ExitCode {
+	param ( $Code )
+	if ($null -eq $Code) { return "N/A" }
+	return '{0} (0x{0:X8})' -f $Code
+}
+
 function Check-Processes {
 	param ( [switch]$Startup )
 	# One snapshot of every watched instance, keyed by PID. If the snapshot itself fails, skip this pass
 	# so a hiccup is never mistaken for every process exiting.
 	try { $list = @(Get-Process -Name $processNames -IncludeUserName -ErrorAction SilentlyContinue) } catch { return }
+	$now = Get-Date
 	$current = @{}
 	foreach ($p in $list) { $current[$p.Id] = $p }
 
-	# Exits: instances no longer running. The handle held since startup gives the real exit time and code.
+	# Instances that ended. Not logged on their own (another instance may carry on), except error exits
+	# such as crashes, which are logged even when another instance takes over.
 	foreach ($id in @($procs.Keys)) {
 		if ($current.ContainsKey($id)) { continue }
-		$t = $procs[$id]
+		$t = $procs[$id]; $g = $groups[$t.Key]
 		# (PowerShell returns $null rather than throwing when a property can't be read, so check values, not just errors)
 		$exitTime = $null; $exitCode = $null
 		if ($t.HasHandle) { try { $exitTime = $t.Process.ExitTime; $exitCode = $t.Process.ExitCode } catch { } }
-		if (-not $exitTime) { $exitTime = Get-Date }
-		$exitCode = if ($null -ne $exitCode) { '{0} (0x{0:X8})' -f $exitCode } else { "N/A" }
-		$ran = "N/A"
-		if ($t.Start) { $span = $exitTime - $t.Start; $ran = '{0}:{1:mm\:ss}' -f [int][math]::Floor($span.TotalHours), $span }
-		Log-Message "PROCESS EXITED: $($t.Desc) | Ran: $ran | Exit code: $exitCode" -Time $exitTime
+		if (-not $exitTime) { $exitTime = $now }
+		if ($null -ne $exitCode -and $exitCode -lt 0) { Log-Message "PROCESS ERROR EXIT: $($t.Key) | PID $id | Exit code: $(Format-ExitCode $exitCode)" -Time $exitTime }
+		$g.Running--
+		if (-not $g.LastExit -or $exitTime -ge $g.LastExit) { $g.LastExit = $exitTime; $g.LastCode = $exitCode }
 		$t.Process.Dispose(); $procs.Remove($id)
 	}
 
-	# New instances: hold a handle so the exit code/time stay readable (also stops Windows reusing the PID meanwhile)
+	# New instances. Logged only when the process wasn't already running for that user/session.
 	foreach ($id in $current.Keys) {
 		if ($procs.ContainsKey($id)) { continue }
 		$p = $current[$id]
+		$user = if ($p.UserName) { $p.UserName } else { "Unknown" }
+		$key = "$($p.ProcessName) | User: $user | Session: $($p.SessionId)"
+		# Hold a handle so the exit code/time stay readable (also stops Windows reusing the PID meanwhile)
 		$hasHandle = $false; try { $hasHandle = $null -ne $p.Handle } catch { }
 		$start = $null; try { $start = $p.StartTime } catch { }
-		$user = if ($p.UserName) { $p.UserName } else { "Unknown" }
-		$desc = "$($p.ProcessName) PID $id | User: $user | Session: $($p.SessionId)"
+		$procs[$id] = [pscustomobject]@{ Process = $p; HasHandle = $hasHandle; Key = $key }
+		if ($groups.ContainsKey($key)) { $groups[$key].Running++; continue }	# Extra instance or hand-off
+		$groups[$key] = [pscustomobject]@{ Running = 1; Since = $start; LastExit = $null; LastCode = $null }
 		$detail = if ($logProcessDetails) { Get-ProcessDetail $id } else { "" }
-		$procs[$id] = [pscustomobject]@{ Process = $p; HasHandle = $hasHandle; Start = $start; Desc = $desc }
-
 		if ($Startup) {
 			$started = if ($start) { $start.ToString('yyyy-MM-dd HH:mm:ss.fff') } else { "N/A" }
-			Log-Message "PROCESS STARTUP DETECTION: $desc | Started: $started$detail"
+			Log-Message "PROCESS STARTUP DETECTION: $key | PID $id | Started: $started$detail"
 		}
-		else { Log-Message "PROCESS STARTED: $desc$detail" -Time $(if ($start) { $start } else { Get-Date }) }
+		else { Log-Message "PROCESS STARTED: $key | PID $id$detail" -Time $(if ($start) { $start } else { $now }) }
+	}
+
+	# Stopped: nothing left running for that user/session for longer than the grace period.
+	# Stamped with when the last instance exited, with that instance's exit code.
+	foreach ($key in @($groups.Keys)) {
+		$g = $groups[$key]
+		if ($g.Running -gt 0 -or ($now - $g.LastExit).TotalSeconds -lt $processGraceSec) { continue }
+		$ran = "N/A"
+		if ($g.Since) { $span = $g.LastExit - $g.Since; $ran = '{0}:{1:mm\:ss}' -f [int][math]::Floor($span.TotalHours), $span }
+		Log-Message "PROCESS STOPPED: $key | Ran: $ran | Exit code: $(Format-ExitCode $g.LastCode)" -Time $g.LastExit
+		$groups.Remove($key)
 	}
 }
 
